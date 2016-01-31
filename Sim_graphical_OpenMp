@@ -1,0 +1,116 @@
+#include <vector>
+#include <cmath>
+#include <iostream>
+#include <SFML/Graphics.hpp>
+#include <fstream>
+#include <string.h>
+#include <cstddef>
+
+#include "body.cpp"
+using namespace std;
+
+//Util functions
+
+sf::RenderWindow* window;
+
+
+class Universe {
+	double _delta_t;
+	vector<Body> _oldBodies;
+	vector<Body> _newBodies;
+
+public:
+	Universe(double delta_t, string filename) {
+		_delta_t = delta_t;
+		_oldBodies = vector<Body>();
+		_newBodies = vector<Body>();
+
+		fstream file(filename.c_str());
+		file.ignore(256, '\n');
+		file.ignore(256, '\n');
+		 while (!file.eof()) {
+			string mass, x_vel, y_vel, x_pos, y_pos;
+
+			file >> mass >> x_pos >> y_pos >> x_vel >> y_vel;
+			if (mass == "")
+				break;
+			cout << mass << " " << x_pos << " " << y_pos<< " "  << x_vel<< " "  << y_vel << endl;
+		 	Body newbody(stod(mass), stod(x_vel), stod(y_vel), stod(x_pos), stod(y_pos));
+		 	_oldBodies.push_back(newbody);
+		 }
+	}
+
+	void nextIteration() {
+	#pragma omp parallel for
+
+	for (int i = 0; i < _oldBodies.size(); i++) {
+		Body newBody = _oldBodies[i];
+		newBody.calculateForces(_oldBodies);
+		newBody.calculateNewPosition(_delta_t);
+		_newBodies.push_back(newBody);
+	}
+
+	_oldBodies.clear();
+	_oldBodies = _newBodies;
+	_newBodies.clear();
+	}
+
+	vector<Body> getBodies() {
+		return _oldBodies;
+	}
+
+	void addBody(Body B) {
+		_oldBodies.push_back(B);
+	}
+};
+
+void initGraphicWindow() {
+	// create the window
+    window = new sf::RenderWindow (sf::VideoMode(1024, 768), "My window");
+}
+
+void drawBodies(vector<Body> totalBodies) {
+	for (int i = 0; i < totalBodies.size(); i++) {
+		// draw everything here...
+        // window.draw(...);
+        sf::CircleShape shape(10);
+		shape.setFillColor(sf::Color(150, 50, 250));
+		shape.setPosition(totalBodies[i].getPos().getX()/10, totalBodies[i].getPos().getY()/10);
+		window->draw(shape);
+	}
+}
+
+int main()
+{
+	initGraphicWindow();
+	Universe universe(0.1, "input.txt");
+	// totalBodies = vector<Body>();
+	// Body body(5.972*pow(10,24), 0, -30*pow(10,3), 149.6*pow(10,9), 0);
+	// totalBodies.push_back(body);
+	// Body body2(1.98*pow(10,30), 0, 0, 0, 0);
+	// totalBodies.push_back(body2);
+	// int iterations = 0;
+ //    // run the program as long as the window is open
+     while (window->isOpen())
+      {
+      	 // check all the window's events that were triggered since the last iteration of the loop
+        sf::Event event;
+        while (window->pollEvent(event))
+        {
+            // "close requested" event: we close the window
+            if (event.type == sf::Event::Closed)
+                window->close();
+        }
+
+        // clear the window with black color
+        window->clear(sf::Color::Black);
+        universe.nextIteration();
+        drawBodies(universe.getBodies());
+
+        // end the current frame
+        window->display();
+     }
+
+
+    return 0;
+}
